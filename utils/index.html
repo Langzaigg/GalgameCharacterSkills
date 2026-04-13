@@ -246,13 +246,109 @@
         .auto-scan-status.active {
             color: #48bb78;
         }
+        
+        .mode-switch-container {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 20px;
+            padding: 16px;
+            background: #f7fafc;
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+        }
+        
+        .mode-switch-label {
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 0.95rem;
+        }
+        
+        .mode-switch {
+            display: flex;
+            background: #e2e8f0;
+            border-radius: 10px;
+            padding: 4px;
+            gap: 4px;
+        }
+        
+        .mode-option {
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            color: #718096;
+        }
+        
+        .mode-option:hover {
+            color: #4a5568;
+        }
+        
+        .mode-option.active {
+            background: white;
+            color: #667eea;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .mode-description {
+            font-size: 0.85rem;
+            color: #718096;
+            margin-left: auto;
+        }
+        
+        .vndb-section {
+            background: #f7fafc;
+            padding: 16px;
+            border-radius: 10px;
+            margin-top: 16px;
+        }
+        
+        .vndb-info {
+            margin-top: 12px;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .vndb-info-item {
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+        
+        .vndb-info-label {
+            font-weight: 600;
+            color: #4a5568;
+        }
+        
+        .vndb-info-value {
+            color: #2d3748;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .section-divider {
+            border-top: 1px solid #e2e8f0;
+            margin: 20px 0;
+        }
+        
+        .optional-label::after {
+            content: " (可选)";
+            color: #718096;
+            font-weight: normal;
+            font-size: 0.85rem;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>Galgame Character Skills</h1>
-            <p>将文档转换为结构化角色技能</p>
+            <p>将文档转换为结构化角色技能或SillyTavern角色卡</p>
         </div>
         
         <div class="card">
@@ -272,6 +368,18 @@
         </div>
         
         <div class="card">
+            <h2 class="card-title">模式选择</h2>
+            <div class="mode-switch-container">
+                <span class="mode-switch-label">输出模式：</span>
+                <div class="mode-switch">
+                    <div class="mode-option active" data-mode="skills" onclick="switchMode('skills')">Skills</div>
+                    <div class="mode-option" data-mode="chara_card" onclick="switchMode('chara_card')">角色卡</div>
+                </div>
+                <span class="mode-description" id="modeDescription">生成技能文件夹，用于AI工具/智能体</span>
+            </div>
+        </div>
+        
+        <div class="card">
             <h2 class="card-title">文件选择</h2>
             
             <div class="form-group">
@@ -282,6 +390,29 @@
             </div>
             
             <div class="token-info empty" id="tokenInfo">未选择文件</div>
+            
+            <div class="section-divider"></div>
+            
+            <div class="form-group">
+                <label class="form-label optional-label">输出语言</label>
+                <select class="form-input" id="outputLanguage">
+                    <option value="">自动检测（跟随原文）</option>
+                    <option value="zh">中文</option>
+                    <option value="en">English</option>
+                    <option value="ja">日本語</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label optional-label">VNDB 角色ID</label>
+                <div class="flex-row">
+                    <input type="text" class="form-input" id="vndbId" placeholder="例如: c12345 或 12345" style="flex: 1;">
+                    <button class="btn btn-secondary" onclick="fetchVNDBInfo()">获取信息</button>
+                </div>
+            </div>
+            <div id="vndbInfo" class="vndb-section hidden">
+                <div class="vndb-info" id="vndbInfoContent"></div>
+            </div>
         </div>
         
         <div class="card">
@@ -290,10 +421,14 @@
                 <label class="form-label">角色名称</label>
                 <input type="text" class="form-input" id="roleName" placeholder="输入要分析的角色名称">
             </div>
-            <div class="form-group">
-                <label class="form-label">补充说明</label>
-                <textarea class="form-input" id="instruction" placeholder="输入任何特定的分析指令..."></textarea>
+            
+            <div id="skillsOnlySection">
+                <div class="form-group">
+                    <label class="form-label optional-label">补充说明</label>
+                    <textarea class="form-input" id="instruction" placeholder="输入任何特定的分析指令..."></textarea>
+                </div>
             </div>
+            
             <div class="form-group">
                 <label class="form-label">并发数量</label>
                 <input type="number" class="form-input" id="concurrency" placeholder="1" min="1" max="10" value="1">
@@ -305,17 +440,25 @@
         </div>
         
         <div class="card">
-            <h2 class="card-title">技能生成</h2>
-            <p class="description">基于归纳结果生成结构化的技能文件夹</p>
+            <h2 class="card-title">生成</h2>
+            <p class="description" id="generateDescription">基于归纳结果生成结构化的技能文件夹</p>
             <div class="form-group">
                 <label class="form-label">选择角色</label>
                 <select class="form-input" id="roleSelect">
                     <option value="">请选择角色...</option>
                 </select>
             </div>
+            
+            <div id="creatorSection" class="hidden">
+                <div class="form-group">
+                    <label class="form-label optional-label">创作者名称</label>
+                    <input type="text" class="form-input" id="creator" placeholder="输入创作者名称">
+                </div>
+            </div>
+            
             <button class="btn btn-primary" onclick="generateSkills()">
                 <span class="spinner"></span>
-                <span>生成技能文件夹</span>
+                <span id="generateButtonText">生成技能文件夹</span>
             </button>
         </div>
         
@@ -332,6 +475,8 @@
     <script>
         let currentFile = '';
         let previousFiles = [];
+        let currentMode = 'skills';
+        let vndbData = null;
         
         function log(message, type = 'normal') {
             const logContent = document.getElementById('logContent');
@@ -346,6 +491,100 @@
         function setLoading(btn, loading) {
             btn.disabled = loading;
             btn.classList.toggle('loading', loading);
+        }
+        
+        function switchMode(mode) {
+            currentMode = mode;
+
+            document.querySelectorAll('.mode-option').forEach(el => {
+                el.classList.toggle('active', el.dataset.mode === mode);
+            });
+
+            const descEl = document.getElementById('modeDescription');
+            const genDescEl = document.getElementById('generateDescription');
+            const genBtnText = document.getElementById('generateButtonText');
+
+            if (mode === 'skills') {
+                descEl.textContent = '生成技能文件夹，用于AI工具/智能体';
+                genDescEl.textContent = '基于归纳结果生成结构化的技能文件夹';
+                genBtnText.textContent = '生成技能文件夹';
+            } else {
+                descEl.textContent = '生成SillyTavern角色卡JSON文件';
+                genDescEl.textContent = '基于归纳结果生成SillyTavern角色卡';
+                genBtnText.textContent = '生成角色卡';
+            }
+
+            document.getElementById('skillsOnlySection').classList.toggle('hidden', mode !== 'skills');
+            document.getElementById('creatorSection').classList.toggle('hidden', mode !== 'chara_card');
+
+            scanRoles();
+
+            log(`→ 切换到模式: ${mode === 'skills' ? 'Skills' : '角色卡'}`, 'info');
+        }
+        
+        async function fetchVNDBInfo() {
+            const vndbId = document.getElementById('vndbId').value.trim();
+            if (!vndbId) {
+                log('⚠ 请输入VNDB ID', 'warning');
+                return;
+            }
+            
+            log(`→ 正在获取VNDB信息: ${vndbId}...`, 'info');
+            
+            try {
+                const response = await fetch('/api/vndb', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vndb_id: vndbId })
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    vndbData = result.data;
+                    displayVNDBInfo(vndbData);
+                    log(`✓ 成功获取角色信息: ${vndbData.name}`, 'success');
+                } else {
+                    log(`✗ ${result.message}`, 'error');
+                    vndbData = null;
+                    document.getElementById('vndbInfo').classList.add('hidden');
+                }
+            } catch (e) {
+                log(`✗ 错误: ${e.message}`, 'error');
+                vndbData = null;
+            }
+        }
+        
+        function displayVNDBInfo(data) {
+            const container = document.getElementById('vndbInfoContent');
+            let html = '';
+
+            if (data.image_url) html += `<div class="vndb-info-item" style="text-align: center; margin-bottom: 12px;"><img src="${data.image_url}" style="max-width: 120px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);" alt="Character portrait" /></div>`;
+
+            if (data.name) html += `<div class="vndb-info-item"><span class="vndb-info-label">名称:</span> <span class="vndb-info-value">${data.name}</span></div>`;
+            if (data.original_name) html += `<div class="vndb-info-item"><span class="vndb-info-label">原名:</span> <span class="vndb-info-value">${data.original_name}</span></div>`;
+            if (data.aliases && data.aliases.length > 0) html += `<div class="vndb-info-item"><span class="vndb-info-label">别名:</span> <span class="vndb-info-value">${data.aliases.join(', ')}</span></div>`;
+            if (data.age) html += `<div class="vndb-info-item"><span class="vndb-info-label">年龄:</span> <span class="vndb-info-value">${data.age}</span></div>`;
+            if (data.birthday) html += `<div class="vndb-info-item"><span class="vndb-info-label">生日:</span> <span class="vndb-info-value">${data.birthday}</span></div>`;
+            if (data.blood_type) html += `<div class="vndb-info-item"><span class="vndb-info-label">血型:</span> <span class="vndb-info-value">${data.blood_type}</span></div>`;
+
+            if (data.height) html += `<div class="vndb-info-item"><span class="vndb-info-label">身高:</span> <span class="vndb-info-value">${data.height}cm</span></div>`;
+            if (data.weight) html += `<div class="vndb-info-item"><span class="vndb-info-label">体重:</span> <span class="vndb-info-value">${data.weight}kg</span></div>`;
+            if (data.bust && data.waist && data.hips) html += `<div class="vndb-info-item"><span class="vndb-info-label">三围:</span> <span class="vndb-info-value">${data.bust}-${data.waist}-${data.hips}cm</span></div>`;
+
+            if (data.traits && data.traits.length > 0) {
+                html += `<div class="vndb-info-item"><span class="vndb-info-label">特征 (${data.traits.length}个):</span> <span class="vndb-info-value">${data.traits.join(', ')}</span></div>`;
+            }
+
+            if (data.vns && data.vns.length > 0) {
+                html += `<div class="vndb-info-item"><span class="vndb-info-label">所属游戏 (${data.vns.length}个):</span> <span class="vndb-info-value">${data.vns.join(', ')}</span></div>`;
+            }
+
+            if (data.description) {
+                html += `<div class="vndb-info-item"><span class="vndb-info-label">描述:</span> <span class="vndb-info-value">${data.description}</span></div>`;
+            }
+
+            container.innerHTML = html;
+            document.getElementById('vndbInfo').classList.remove('hidden');
         }
         
         async function scanFiles() {
@@ -398,22 +637,31 @@
             try {
                 const response = await fetch('/api/summaries/roles');
                 const result = await response.json();
-                
+
                 const select = document.getElementById('roleSelect');
                 const currentValue = select.value;
-                
+
                 select.innerHTML = '<option value="">请选择角色...</option>';
-                
-                if (result.success && result.roles.length > 0) {
-                    result.roles.forEach(role => {
-                        const option = document.createElement('option');
-                        option.value = role;
-                        option.textContent = role;
-                        select.appendChild(option);
-                    });
-                    
-                    if (currentValue && result.roles.includes(currentValue)) {
-                        select.value = currentValue;
+
+                if (result.success) {
+                    let availableRoles = [];
+                    if (currentMode === 'chara_card') {
+                        availableRoles = result.chara_card_roles || [];
+                    } else {
+                        availableRoles = result.skills_roles || [];
+                    }
+
+                    if (availableRoles.length > 0) {
+                        availableRoles.forEach(role => {
+                            const option = document.createElement('option');
+                            option.value = role;
+                            option.textContent = role;
+                            select.appendChild(option);
+                        });
+
+                        if (currentValue && availableRoles.includes(currentValue)) {
+                            select.value = currentValue;
+                        }
                     }
                 }
             } catch (e) {
@@ -484,49 +732,8 @@
             };
         }
         
-        async function processFile() {
-            if (!currentFile) {
-                log('⚠ 请先选择文件', 'warning');
-                return;
-            }
-            
-            const btn = event.target.closest('button');
-            setLoading(btn, true);
-            log('→ 正在处理文件...', 'info');
-            
-            try {
-                const response = await fetch('/api/process', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        file_path: currentFile,
-                        ...getConfig()
-                    })
-                });
-                const result = await response.json();
-                
-                if (result.results) {
-                    result.results.forEach(r => log(`  ${r}`, 'info'));
-                }
-                
-                if (result.success) {
-                    log('✓ 文件处理完成', 'success');
-                    if (result.output) {
-                        log(`  输出: ${result.output}`, 'info');
-                    }
-                } else {
-                    log(`✗ ${result.message}`, 'error');
-                }
-            } catch (e) {
-                log(`✗ 错误: ${e.message}`, 'error');
-            }
-            
-            setLoading(btn, false);
-        }
-        
         async function startSummarize() {
             const roleName = document.getElementById('roleName').value;
-            const instruction = document.getElementById('instruction').value;
             const concurrency = parseInt(document.getElementById('concurrency').value) || 1;
             
             if (!roleName) {
@@ -541,19 +748,27 @@
             
             const btn = event.target.closest('button');
             setLoading(btn, true);
-            log(`→ 开始为角色归纳: ${roleName} (并发: ${concurrency})`, 'info');
+            log(`→ 开始为角色归纳: ${roleName} (模式: ${currentMode === 'skills' ? 'Skills' : '角色卡'}, 并发: ${concurrency})`, 'info');
             
             try {
+                const requestData = {
+                    role_name: roleName,
+                    file_path: currentFile,
+                    concurrency: concurrency,
+                    mode: currentMode,
+                    output_language: document.getElementById('outputLanguage').value,
+                    vndb_data: vndbData,
+                    ...getConfig()
+                };
+                
+                if (currentMode === 'skills') {
+                    requestData.instruction = document.getElementById('instruction').value;
+                }
+                
                 const response = await fetch('/api/summarize', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        role_name: roleName,
-                        instruction: instruction,
-                        file_path: currentFile,
-                        concurrency: concurrency,
-                        ...getConfig()
-                    })
+                    body: JSON.stringify(requestData)
                 });
                 const result = await response.json();
                 
@@ -583,16 +798,25 @@
             
             const btn = event.target.closest('button');
             setLoading(btn, true);
-            log(`→ 开始为角色 "${roleName}" 生成技能文件夹...`, 'info');
+            log(`→ 开始为角色 "${roleName}" 生成${currentMode === 'skills' ? '技能文件夹' : '角色卡'}...`, 'info');
             
             try {
+                const requestData = {
+                    role_name: roleName,
+                    mode: currentMode,
+                    output_language: document.getElementById('outputLanguage').value,
+                    vndb_data: vndbData,
+                    ...getConfig()
+                };
+                
+                if (currentMode === 'chara_card') {
+                    requestData.creator = document.getElementById('creator').value;
+                }
+                
                 const response = await fetch('/api/skills', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        role_name: roleName,
-                        ...getConfig()
-                    })
+                    body: JSON.stringify(requestData)
                 });
                 const result = await response.json();
                 
@@ -601,7 +825,23 @@
                 }
                 
                 if (result.success) {
-                    log('✓ 技能文件夹生成完成', 'success');
+                    log(`✓ ${currentMode === 'skills' ? '技能文件夹' : '角色卡'}生成完成`, 'success');
+                    if (result.output_path) {
+                        log(`  JSON路径: ${result.output_path}`, 'info');
+                    }
+                    if (result.image_path) {
+                        log(`  图片路径: ${result.image_path}`, 'info');
+                    }
+                    if (result.png_path) {
+                        log(`  PNG角色卡: ${result.png_path}`, 'info');
+                        log(`  (可直接导入SillyTavern)`, 'success');
+                    }
+                    if (result.conversion_error) {
+                        log(`  图片转换问题: ${result.conversion_error}`, 'warning');
+                    }
+                    if (result.warning) {
+                        log(`  警告: ${result.warning}`, 'warning');
+                    }
                 } else {
                     log(`✗ ${result.message}`, 'error');
                 }

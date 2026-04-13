@@ -1,0 +1,46 @@
+{
+    "name": "{{name}}",
+    "description": "{{description}}",
+    "personality": "{{personality}}",
+    "first_mes": "{{first_mes}}",
+    "avatar": "none",
+    "mes_example": "{{mes_example}}",
+    "scenario": "{{scenario}}",
+    "create_date": "{{create_date}}",
+    "talkativeness": "0.5",
+    "fav": false,
+    "creatorcomment": "{{creatorcomment}}",
+    "spec": "chara_card_v3",
+    "spec_version": "3.0",
+    "data": {
+        "name": "{{name}}",
+        "description": "{{description}}",
+        "personality": "{{personality}}",
+        "scenario": "{{scenario}}",
+        "first_mes": "{{first_mes}}",
+        "mes_example": "{{mes_example}}",
+        "creator_notes": "{{creatorcomment}}",
+        "system_prompt": "{{system_prompt}}",
+        "post_history_instructions": "{{post_history_instructions}}",
+        "tags": {{tags}},
+        "creator": "{{creator}}",
+        "character_version": "1.0.0",
+        "alternate_greetings": [],
+        "extensions": {
+            "talkativeness": "0.5",
+            "fav": false,
+            "world": "{{world_name}}",
+            "depth_prompt": {
+                "prompt": "{{depth_prompt}}",
+                "depth": 4,
+                "role": "system"
+            }
+        },
+        "character_book": {
+            "entries": {{character_book_entries}},
+            "name": "{{world_name}}"
+        },
+        "group_only_greetings": []
+    },
+    "tags": {{tags}}
+}
