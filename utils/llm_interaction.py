@@ -1002,6 +1002,15 @@ IMPORTANT INSTRUCTIONS:
 5. Do not create extra folders or alternative variants
 6. Ensure SKILL.md explicitly tells future readers how to use and combine all referenced markdown resources
 
+## LANGUAGE REQUIREMENT
+By default, you MUST use the same language as the provided summaries and source material.
+- If the summaries are in Chinese, write all generated markdown in Chinese
+- If the summaries are in Japanese, write all generated markdown in Japanese
+- If the summaries are in English, write all generated markdown in English
+- Keep the language consistent across SKILL.md, soul.md, limit.md, and all resource markdown files
+- Do not mix languages unless the source material itself clearly does so
+- Preserve original-language character voice, terminology, and quoted phrasing style whenever possible
+
 Use the write_file tool to create all required files."""
 
         if output_language:
