@@ -116,8 +116,8 @@ def _extract_summary_highlights(content, max_chars=5000):
 def _extract_key_sections(content, max_chars=8000):
     key_heading_keywords = (
         "核心", "关键", "关系", "经历", "事件", "人格", "语言", "行为",
-        "情绪", "设定", "背景", "成长", "矛盾", "identity", "relationship",
-        "speech", "behavior", "event", "background", "persona", "emotion"
+        "情绪", "设定", "背景", "成长", "矛盾", "剧情", "identity", "relationship",
+        "speech", "behavior", "event", "background", "persona", "emotion", "plot", "summary"
     )
     lines = content.splitlines()
     sections = []
@@ -288,6 +288,19 @@ def _estimate_tokens_from_text(text):
         return 0
     # Conservative rough estimate for mixed Chinese/Japanese/English content.
     return max(1, len(text) // 2)
+
+
+def _is_context_length_error(error_text):
+    if not error_text:
+        return False
+    normalized = error_text.lower()
+    patterns = (
+        "context",
+        "length",
+        "too many",
+        "limit",
+    )
+    return any(pattern in normalized for pattern in patterns)
 
 def get_llm_client():
     data = request.json if request.is_json else {}
@@ -495,8 +508,26 @@ def process_single_slice(args):
                 result['success'] = True
                 result['summary'] = f"Slice {slice_index + 1} saved to {output_file_path}"
             else:
-                result['success'] = True
-                result['summary'] = choice.message.content
+                content = choice.message.content if hasattr(choice, 'message') and choice.message.content else ""
+                if content:
+                    retry_response = llm_client.organize_and_write_markdown(
+                        content,
+                        output_file_path,
+                        role_name,
+                        output_language
+                    )
+                    retry_tool_calls = llm_client.get_tool_response(retry_response)
+                    if retry_tool_calls:
+                        for tool_call in retry_tool_calls:
+                            tool_result = ToolHandler.handle_tool_call(tool_call)
+                            result['tool_results'].append(tool_result)
+                        result['tool_results'].append("Recovered by organize-and-write retry")
+                        result['success'] = True
+                        result['summary'] = f"Slice {slice_index + 1} saved to {output_file_path}"
+                    else:
+                        result['tool_results'].append("Retry failed: no tool call returned during organize-and-write")
+                else:
+                    result['tool_results'].append("No tool call and no content returned")
     
     return result
 
@@ -656,11 +687,45 @@ def generate_skills_folder(data):
     all_results = []
     max_iterations = 20
     iteration = 0
+    compression_retry_used = False
     while iteration < max_iterations:
         iteration += 1
         response = llm_interaction.send_message(messages, tools, use_counter=False)
         if not response:
-            return jsonify({'success': False, 'message': 'LLM交互失败'})
+            if (
+                context_mode == "full"
+                and not compression_retry_used
+                and _is_context_length_error(getattr(llm_interaction, "last_error", ""))
+            ):
+                target_budget_chars = target_budget_tokens * 2
+                summaries_text = _build_prioritized_skill_generation_context(
+                    summary_files,
+                    target_total_chars=target_budget_chars
+                )
+                if not summaries_text:
+                    return jsonify({'success': False, 'message': f'Î´ÄÜ¶ÁÈ¡½ÇÉ« "{role_name}" µÄ¹éÄÉÄÚÈÝ'})
+
+                context_mode = "compressed"
+                compression_retry_used = True
+                compressed_chars = len(summaries_text)
+                estimated_tokens = _estimate_tokens_from_text(summaries_text)
+                compression_ratio = (compressed_chars / raw_total_chars) if raw_total_chars else 0
+                print(
+                    f"[SkillGen] auto-retry role={role_name} mode={context_mode} "
+                    f"final_chars={compressed_chars} final_estimated_tokens={estimated_tokens} "
+                    f"compression_ratio={compression_ratio:.2%} "
+                    f"strategy=head_tail_weighted_1_2_then_key_sections"
+                )
+                messages, tools = llm_interaction.generate_skills_folder_init(
+                    summaries_text,
+                    role_name,
+                    output_language,
+                    vndb_data
+                )
+                continue
+
+            last_error = getattr(llm_interaction, "last_error", "") or "unknown error"
+            return jsonify({'success': False, 'message': f'LLM交互失败: {last_error}'})
         tool_calls = llm_interaction.get_tool_response(response)
         if not tool_calls:
             break

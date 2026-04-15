@@ -14,6 +14,7 @@ class LLMInteraction:
         self.modelname = ""
         self.apikey = ""
         self.python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        self.last_error = ""
     
     def set_config(self, baseurl, modelname, apikey):
         self.baseurl = baseurl
@@ -30,6 +31,7 @@ class LLMInteraction:
     
     def send_message(self, messages, tools=None, max_retries=3, use_counter=True):
         import time
+        self.last_error = ""
         
         model = self.modelname
         baseurl = self.baseurl.lower() if self.baseurl else ''
@@ -95,6 +97,7 @@ class LLMInteraction:
                             print(f"[LLM] Tool calls: {len(msg.tool_calls)}")
                 return response
             except Exception as e:
+                self.last_error = str(e)
                 print(f"[LLM] Attempt {attempt + 1} failed: {e}")
                 if attempt < max_retries - 1:
                     wait_time = 2 ** attempt
@@ -116,6 +119,58 @@ class LLMInteraction:
             if hasattr(choice, 'message') and hasattr(choice.message, 'tool_calls'):
                 return choice.message.tool_calls
         return None
+
+    def organize_and_write_markdown(self, draft_content, output_file_path, role_name, output_language=""):
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "write_file",
+                    "description": "Write file to local disk",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "file_path": {
+                                "type": "string",
+                                "description": "File path"
+                            },
+                            "content": {
+                                "type": "string",
+                                "description": "File content in markdown format"
+                            }
+                        },
+                        "required": ["file_path", "content"]
+                    }
+                }
+            }
+        ]
+
+        system_prompt = f"""You are a markdown整理助手.
+Your task is to take an existing draft and rewrite it into clean, structured markdown, then save it with the write_file tool.
+
+REQUIREMENTS:
+1. You MUST reorganize the draft content before saving it.
+2. You MUST call the write_file tool and save to exactly: {output_file_path}
+3. Do NOT return the final content as plain chat text only.
+4. Keep the original meaning, but improve structure, readability, and formatting.
+5. If the content is a plot recap, keep it concise and well-structured.
+6. If the content is a character analysis, preserve its analysis structure while cleaning it up.
+7. The output must remain focused on role "{role_name}" when applicable."""
+
+        if output_language:
+            lang_names = {"zh": "中文", "en": "English", "ja": "日本語"}
+            lang_name = lang_names.get(output_language, output_language)
+            system_prompt += f"""
+
+## OUTPUT LANGUAGE
+You MUST write the final markdown in {lang_name}."""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Please reorganize the following draft into clean markdown and save it with write_file.\n\nDraft:\n{draft_content}"}
+        ]
+
+        return self.send_message(messages, tools, use_counter=False)
     
     def generate_cleanup_script(self, file_content, source_file_path, output_file_path):
         file_name = os.path.basename(source_file_path)
@@ -256,6 +311,22 @@ Extract actionable behavioral patterns that can drive dialogue:
 4. Include SPECIFIC examples from text - actual quotes, exact phrases, concrete scenarios
 5. Distinguish between: (a) what's explicitly shown vs (b) what's reasonably inferred
 6. Capture NUANCE: contradictions, growth, context-dependent behaviors
+
+## NO-CHARACTER FALLBACK
+If this slice contains no meaningful content about "{role_name}" at all, do NOT force a character analysis.
+Instead:
+- Write only a very short plot recap of this slice
+- Keep it within 500 Chinese characters (or equivalent brevity in the source language)
+- Focus on what happens in the story, not on {role_name}'s personality
+- Do not output Part A / Part B sections in this case
+- Use a simple structure like:
+  - `# 剧情梳理`
+  - a few bullet points, or one short paragraph
+
+## TOOL USAGE REQUIREMENT
+Whether you produce a full character analysis or the no-character fallback plot recap, you MUST still call the `write_file` tool.
+- Always save the final markdown to: {output_file_path}
+- Do not return the final answer as plain chat text only
 
 ## OUTPUT FORMAT:
 Use markdown with clear hierarchy:
